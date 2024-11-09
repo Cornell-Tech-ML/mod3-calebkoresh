@@ -22,15 +22,14 @@ def RParam(*shape, backend):
 class Network(minitorch.Module):
     def __init__(self, hidden, backend):
         super().__init__()
-
-        # Submodules
         self.layer1 = Linear(2, hidden, backend)
         self.layer2 = Linear(hidden, hidden, backend)
         self.layer3 = Linear(hidden, 1, backend)
 
     def forward(self, x):
-        # TODO: Implement for Task 3.5.
-        raise NotImplementedError("Need to implement for Task 3.5")
+        h = self.layer1.forward(x).relu()
+        h = self.layer2.forward(h).relu()
+        return self.layer3.forward(h).sigmoid()
 
 
 class Linear(minitorch.Module):
@@ -43,8 +42,8 @@ class Linear(minitorch.Module):
         self.out_size = out_size
 
     def forward(self, x):
-        # TODO: Implement for Task 3.5.
-        raise NotImplementedError("Need to implement for Task 3.5")
+        # Use matrix multiplication directly instead of view/sum operations
+        return self.weights.value.matrix_multiply(x.permute(1, 0)).permute(1, 0) + self.bias.value
 
 
 class FastTrain:

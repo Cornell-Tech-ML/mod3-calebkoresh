@@ -1,5 +1,13 @@
 from numba import njit
 
+import os
+import sys
+
+# Change working directory to one level up from this file
+os.chdir(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(0, os.getcwd())
+
+
 import minitorch
 import minitorch.fast_ops
 

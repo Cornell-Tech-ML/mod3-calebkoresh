@@ -5,6 +5,17 @@ from typing import List, Tuple
 
 
 def make_pts(N: int) -> List[Tuple[float, float]]:
+    """Make a grid of randomly generated points
+
+    Args:
+    ----
+        N (int): The number of points to generate in the grid.
+
+    Returns:
+    -------
+        List[Tuple[float, float]]: A list of N tuples, where each tuple contains two random float values between 0 and 1, representing x and y coordinates.
+
+    """
     X = []
     for i in range(N):
         x_1 = random.random()
@@ -21,6 +32,17 @@ class Graph:
 
 
 def simple(N: int) -> Graph:
+    """Generate a simple dataset with a vertical decision boundary at 0.5
+
+    Args:
+    ----
+        N (int): The number of points to generate in the dataset.
+
+    Returns:
+    -------
+        Graph: A Graph object containing N points and their corresponding labels.
+
+    """
     X = make_pts(N)
     y = []
     for x_1, x_2 in X:
@@ -30,6 +52,17 @@ def simple(N: int) -> Graph:
 
 
 def diag(N: int) -> Graph:
+    """Generate a dataset with a diagonal decision boundary at x_1 + x_2 < 0.5
+
+    Args:
+    ----
+        N (int): The number of points to generate in the dataset
+
+    Returns:
+    -------
+        Graph: A Graph object containing N points and their corresponding labels
+
+    """
     X = make_pts(N)
     y = []
     for x_1, x_2 in X:
@@ -39,6 +72,17 @@ def diag(N: int) -> Graph:
 
 
 def split(N: int) -> Graph:
+    """Generate a dataset with two vertical decision boundaries at x_1 < 0.2 and x_1 > 0.8
+
+    Args:
+    ----
+        N (int): The number of points to generate in the dataset
+
+    Returns:
+    -------
+        Graph: A Graph object containing N points and their corresponding labels
+
+    """
     X = make_pts(N)
     y = []
     for x_1, x_2 in X:
@@ -48,25 +92,59 @@ def split(N: int) -> Graph:
 
 
 def xor(N: int) -> Graph:
+    """Generate a dataset with an XOR-like decision boundary (x_1 > 0.5 xor x_2 > 0.5)
+
+    Args:
+    ----
+        N (int): The number of points to generate in the dataset
+
+    Returns:
+    -------
+        Graph: A Graph object containing N points and their corresponding labels
+
+    """
     X = make_pts(N)
     y = []
     for x_1, x_2 in X:
-        y1 = 1 if ((x_1 < 0.5 and x_2 > 0.5) or (x_1 > 0.5 and x_2 < 0.5)) else 0
+        y1 = 1 if x_1 < 0.5 and x_2 > 0.5 or x_1 > 0.5 and x_2 < 0.5 else 0
         y.append(y1)
     return Graph(N, X, y)
 
 
 def circle(N: int) -> Graph:
+    """Generate a dataset with a circular decision boundary
+
+    Args:
+    ----
+        N (int): The number of points to generate in the dataset
+
+    Returns:
+    -------
+        Graph: A Graph object containing N points and their corresponding labels
+
+    """
     X = make_pts(N)
     y = []
     for x_1, x_2 in X:
-        x1, x2 = (x_1 - 0.5, x_2 - 0.5)
+        x1, x2 = x_1 - 0.5, x_2 - 0.5
         y1 = 1 if x1 * x1 + x2 * x2 > 0.1 else 0
         y.append(y1)
     return Graph(N, X, y)
 
 
 def spiral(N: int) -> Graph:
+    """Generate a dataset with a spiral decision boundary
+
+    Args:
+    ----
+        N (int): The number of points to generate in the dataset
+
+    Returns:
+    -------
+        Graph: A Graph object containing N points and their corresponding labels
+
+    """
+
     def x(t: float) -> float:
         return t * math.cos(t) / 20.0
 
