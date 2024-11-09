@@ -302,9 +302,11 @@ class Permute(Function):
         """Compute the gradient of the output with respect to the input"""
         order: Tensor = ctx.saved_values[0]
         order2: List[int] = [
-            a[0] for a in sorted(
-                enumerate([order[i] for i in range(order.size)]),key=lambda a: a[1]
-            )]
+            a[0]
+            for a in sorted(
+                enumerate([order[i] for i in range(order.size)]), key=lambda a: a[1]
+            )
+        ]
         return grad_output._new(grad_output._tensor.permute(*order2)), 0.0
 
 

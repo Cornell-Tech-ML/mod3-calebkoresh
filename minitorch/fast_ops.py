@@ -7,7 +7,6 @@ from numba import prange
 from numba import njit as _njit
 
 from .tensor_data import (
-    MAX_DIMS,
     broadcast_index,
     index_to_position,
     shape_broadcast,
@@ -19,7 +18,7 @@ if TYPE_CHECKING:
     from typing import Callable, Optional
 
     from .tensor import Tensor
-    from .tensor_data import Index, Shape, Storage, Strides
+    from .tensor_data import Shape, Storage, Strides
 
 # TIP: Use `NUMBA_DISABLE_JIT=1 pytest tests/ -m task3_1` to run these tests without JIT.
 
@@ -30,6 +29,7 @@ Fn = TypeVar("Fn")
 
 
 def njit(fn: Fn, **kwargs: Any) -> Fn:
+    """JIT compile a function"""
     return _njit(inline="always", **kwargs)(fn)  # type: ignore
 
 
@@ -327,26 +327,26 @@ def tensor_reduce(
         for i in prange(out_size):
             # Convert position to indices
             to_index(i, out_shape, out_index)
-            
+
             # Calculate output position
             o_pos = index_to_position(out_index, out_strides)
-            
+
             # Copy output index to a_index
             for j in range(size):
                 a_index[j] = out_index[j]
-            
+
             # Initialize reduction with first element
             a_index[reduce_dim] = 0
             pos = index_to_position(a_index, a_strides)
             reduced = a_storage[pos]
-            
+
             # Inner reduction loop starting from second element
             for j in range(1, a_shape[reduce_dim]):
                 a_index[reduce_dim] = j
                 pos = index_to_position(a_index, a_strides)
                 # Apply reduction function
                 reduced = fn(reduced, a_storage[pos])
-            
+
             # Store result
             out[o_pos] = reduced
 
@@ -405,28 +405,18 @@ def _tensor_matrix_multiply(
             for j in range(out_shape[2]):
                 # Calculate output position
                 out_pos = (
-                    batch * out_strides[0] + 
-                    i * out_strides[1] + 
-                    j * out_strides[2]
+                    batch * out_strides[0] + i * out_strides[1] + j * out_strides[2]
                 )
 
                 # Initialize accumulator
                 acc = 0.0
-                
+
                 # Inner reduction loop - single multiply per iteration
                 for k in range(a_shape[2]):
-                    a_pos = (
-                        batch * a_batch_stride +
-                        i * a_strides[1] + 
-                        k * a_strides[2]
-                    )
-                    b_pos = (
-                        batch * b_batch_stride +
-                        k * b_strides[1] + 
-                        j * b_strides[2]
-                    )
+                    a_pos = batch * a_batch_stride + i * a_strides[1] + k * a_strides[2]
+                    b_pos = batch * b_batch_stride + k * b_strides[1] + j * b_strides[2]
                     acc += a_storage[a_pos] * b_storage[b_pos]
-                
+
                 # Single write to output
                 out[out_pos] = acc
 
