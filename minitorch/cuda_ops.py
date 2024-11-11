@@ -372,6 +372,8 @@ def tensor_reduce(
             in_pos = index_to_position(a_index, a_strides)
             cache[pos] = fn(cache[pos], a_storage[in_pos])
 
+        cuda.syncthreads()
+
         # Write final reduced value to output
         out[index_to_position(out_index, out_strides)] = cache[pos]
 
@@ -509,7 +511,6 @@ def _tensor_matrix_multiply(
         # Initialize shared memory to 0
         a_shared[tx, ty] = 0.0
         b_shared[tx, ty] = 0.0
-        cuda.syncthreads()
 
         # Load a tile
         a_x = row
