@@ -186,19 +186,24 @@ def tensor_map(
         for i in range(size):
             out_size *= out_shape[i]
 
-        # Create index buffers - initialize directly without np.zeros
-        out_index = np.empty(size, np.int32)
-        in_index = np.empty(size, np.int32)
-        for i in prange(size):
-            out_index[i] = 0
-            in_index[i] = 0
-
         # Main parallel loop
         for i in prange(out_size):
+            # Create index buffers per thread
+            out_index = np.zeros(len(out_shape), np.int32)
+            in_index = np.zeros(len(in_shape), np.int32)
+
+            # Convert position to indices
             to_index(i, out_shape, out_index)
+
+            # Calculate output position
             o_pos = index_to_position(out_index, out_strides)
+            # Map output index to input index
             broadcast_index(out_index, out_shape, in_shape, in_index)
+            
+            # Calculate input position
             i_pos = index_to_position(in_index, in_strides)
+            
+            # Apply function
             out[o_pos] = fn(in_storage[i_pos])
 
     return njit(_map, parallel=True)
