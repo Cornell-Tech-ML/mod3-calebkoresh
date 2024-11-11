@@ -503,45 +503,49 @@ def _tensor_matrix_multiply(
     row = cuda.blockIdx.x * BLOCK_DIM + tx
     col = cuda.blockIdx.y * BLOCK_DIM + ty
 
+    # Only proceed if within output bounds
+    if row >= out_shape[1] or col >= out_shape[2]:
+        return
+
     # Initialize accumulator
     acc = 0.0
 
     # Loop over tiles
     num_tiles = (a_shape[2] + BLOCK_DIM - 1) // BLOCK_DIM
-    for tile_idx in range(num_tiles):
+    for tile_idx in numba.prange(num_tiles):
         # Load a tile cooperatively
         a_x = row
         a_y = tile_idx * BLOCK_DIM + ty
-        if a_x < a_shape[1] and a_y < a_shape[2]:
-            a_pos = batch * a_batch_stride + a_x * a_strides[1] + a_y * a_strides[2]
-            a_shared[tx, ty] = a_storage[a_pos]
-        else:
-            a_shared[tx, ty] = 0.0
+        a_shared[tx, ty] = (
+            a_storage[batch * a_batch_stride + a_x * a_strides[1] + a_y * a_strides[2]]
+            if a_x < a_shape[1] and a_y < a_shape[2]
+            else 0.0
+        )
 
         # Load b tile
         b_x = tile_idx * BLOCK_DIM + tx
         b_y = col
-        if b_x < b_shape[1] and b_y < b_shape[2]:
-            b_pos = batch * b_batch_stride + b_x * b_strides[1] + b_y * b_strides[2]
-            b_shared[tx, ty] = b_storage[b_pos]
-        else:
-            b_shared[tx, ty] = 0.0
+        b_shared[tx, ty] = (
+            b_storage[batch * b_batch_stride + b_x * b_strides[1] + b_y * b_strides[2]]
+            if b_x < b_shape[1] and b_y < b_shape[2]
+            else 0.0
+        )
 
         # Ensure all threads have loaded data
         cuda.syncthreads()
 
         # Compute partial dot product
-        if row < out_shape[1] and col < out_shape[2]:
-            for k in range(min(BLOCK_DIM, a_shape[2] - tile_idx * BLOCK_DIM)):
-                acc += a_shared[tx, k] * b_shared[k, ty]
+        for k in range(BLOCK_DIM):
+            if tile_idx * BLOCK_DIM + k >= a_shape[2]:
+                break
+            acc += a_shared[tx, k] * b_shared[k, ty]
 
         # Ensure computation is complete before next iteration
         cuda.syncthreads()
 
     # Single write to global memory
-    if row < out_shape[1] and col < out_shape[2]:
-        out_pos = batch * out_strides[0] + row * out_strides[1] + col * out_strides[2]
-        out[out_pos] = acc
+    out_pos = batch * out_strides[0] + row * out_strides[1] + col * out_strides[2]
+    out[out_pos] = acc
 
 
 tensor_matrix_multiply = jit(_tensor_matrix_multiply)
