@@ -189,8 +189,8 @@ def tensor_map(
         # Main parallel loop
         for i in prange(out_size):
             # Create index buffers per thread
-            out_index = np.zeros(len(out_shape), np.int32)
-            in_index = np.zeros(len(in_shape), np.int32)
+            out_index = np.empty(len(out_shape), np.int32)
+            in_index = np.empty(len(in_shape), np.int32)
 
             # Convert position to indices
             to_index(i, out_shape, out_index)
@@ -263,17 +263,14 @@ def tensor_zip(
         for i in range(size):
             out_size *= out_shape[i]
 
-        # Create index buffers - initialize directly without np.zeros
-        out_index = np.empty(size, np.int32)
-        a_index = np.empty(size, np.int32)
-        b_index = np.empty(size, np.int32)
-        for i in prange(size):
-            out_index[i] = 0
-            a_index[i] = 0
-            b_index[i] = 0
-
         # Main parallel loop
         for i in prange(out_size):
+            # Create index buffers per thread
+            out_index = np.empty(len(out_shape), np.int32)
+            a_index = np.empty(len(out_shape), np.int32)
+            b_index = np.empty(len(out_shape), np.int32)
+
+            # Convert position to indices and calculate positions
             to_index(i, out_shape, out_index)
             o_pos = index_to_position(out_index, out_strides)
             broadcast_index(out_index, out_shape, a_shape, a_index)
