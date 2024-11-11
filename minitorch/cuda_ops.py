@@ -506,10 +506,6 @@ def _tensor_matrix_multiply(
     pi = cuda.threadIdx.x
     pj = cuda.threadIdx.y
 
-    # Check bounds
-    if i >= out_shape[1] or j >= out_shape[2]:
-        return
-
     # Initialize accumulator
     acc = 0.0
 
@@ -542,8 +538,9 @@ def _tensor_matrix_multiply(
         cuda.syncthreads()
 
         # Compute dot product for this tile
-        for k in range(min(BLOCK_DIM, a_shape[2] - block_start)):
-            acc += a_shared[pi, k] * b_shared[k, pj]
+        if i < out_shape[1] and j < out_shape[2]:
+            for k in range(min(BLOCK_DIM, a_shape[2] - block_start)):
+                acc += a_shared[pi, k] * b_shared[k, pj]
 
         cuda.syncthreads()
 
