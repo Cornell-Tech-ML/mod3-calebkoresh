@@ -458,6 +458,7 @@ def mm_practice(a: Tensor, b: Tensor) -> TensorData:
     )
     return out
 
+
 def _tensor_matrix_multiply(
     out: Storage,
     out_shape: Shape,
@@ -492,8 +493,8 @@ def _tensor_matrix_multiply(
 
     BLOCK_DIM = 32
     # Shared memory tiles for a and b
-    a_shared = cuda.shared.array((BLOCK_DIM, BLOCK_DIM), numba.float32)
-    b_shared = cuda.shared.array((BLOCK_DIM, BLOCK_DIM), numba.float32)
+    a_shared = cuda.shared.array((BLOCK_DIM, BLOCK_DIM), numba.float64)
+    b_shared = cuda.shared.array((BLOCK_DIM, BLOCK_DIM), numba.float64)
 
     # Local thread position in block
     tx = cuda.threadIdx.x
@@ -509,31 +510,27 @@ def _tensor_matrix_multiply(
     # Loop over tiles
     for k_tile in range(0, (a_shape[2] + BLOCK_DIM - 1) // BLOCK_DIM):
         # Load a tile cooperatively
-        k = k_tile * BLOCK_DIM + ty
+        k = k_tile * BLOCK_DIM + tx
         if i < a_shape[1] and k < a_shape[2]:
             a_pos = batch * a_batch_stride + i * a_strides[1] + k * a_strides[2]
-            a_shared[tx, ty] = a_storage[a_pos]
+            a_shared[ty, tx] = a_storage[a_pos]
+        else:
+            a_shared[ty, tx] = 0.0
 
         # Load b tile
-        k = k_tile * BLOCK_DIM + tx
+        k = k_tile * BLOCK_DIM + ty
         if k < b_shape[1] and j < b_shape[2]:
             b_pos = batch * b_batch_stride + k * b_strides[1] + j * b_strides[2]
             b_shared[tx, ty] = b_storage[b_pos]
+        else:
+            b_shared[tx, ty] = 0.0
 
         cuda.syncthreads()
 
         # Compute partial dot product
         if i < out_shape[1] and j < out_shape[2]:
-            # Unroll inner loop for better performance
-            for k in range(0, BLOCK_DIM, 4):
-                if k + k_tile * BLOCK_DIM < a_shape[2]:
-                    acc += a_shared[tx, k] * b_shared[k, ty]
-                    if k + 1 < BLOCK_DIM:
-                        acc += a_shared[tx, k + 1] * b_shared[k + 1, ty]
-                    if k + 2 < BLOCK_DIM:
-                        acc += a_shared[tx, k + 2] * b_shared[k + 2, ty]
-                    if k + 3 < BLOCK_DIM:
-                        acc += a_shared[tx, k + 3] * b_shared[k + 3, ty]
+            for k in range(BLOCK_DIM):
+                acc += a_shared[ty, k] * b_shared[k, ty]
 
         cuda.syncthreads()
 
