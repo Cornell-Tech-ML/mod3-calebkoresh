@@ -45,7 +45,6 @@ broadcast_index = device_jit(broadcast_index)
 
 THREADS_PER_BLOCK = 32
 
-
 class CudaOps(TensorOps):
     cuda = True
 
@@ -361,26 +360,20 @@ def tensor_reduce(
         # Initialize reduction with first element
         cache[pos] = reduce_value
 
+        # Pre-calculate input index array to avoid repeated allocations
+        a_index = cuda.local.array(MAX_DIMS, numba.int32)
+        for i in range(len(out_shape)):
+            a_index[i] = out_index[i]
+
         # Loop over reduction dimension
         for k in range(a_shape[reduce_dim]):
-            # Copy output index to get input index
-            a_index = cuda.local.array(MAX_DIMS, numba.int32)
-            for i in range(len(out_shape)):
-                a_index[i] = out_index[i]
-            # Set reduction dimension index
+            # Update only the reduction dimension index
             a_index[reduce_dim] = k
-
-            # Get input value and reduce
             in_pos = index_to_position(a_index, a_strides)
-            val = a_storage[in_pos]
-            cache[pos] = fn(cache[pos], val)
-
-        # Ensure all threads complete
-        cuda.syncthreads()
+            cache[pos] = fn(cache[pos], a_storage[in_pos])
 
         # Write final reduced value to output
-        out_pos_final = index_to_position(out_index, out_strides)
-        out[out_pos_final] = cache[pos]
+        out[index_to_position(out_index, out_strides)] = cache[pos]
 
     return jit(_reduce)
 
