@@ -512,7 +512,7 @@ def _tensor_matrix_multiply(
 
     # Loop over tiles
     num_tiles = (a_shape[2] + BLOCK_DIM - 1) // BLOCK_DIM
-    for tile_idx in numba.prange(num_tiles):
+    for tile_idx in range(num_tiles):
         # Load a tile cooperatively
         a_x = row
         a_y = tile_idx * BLOCK_DIM + ty
