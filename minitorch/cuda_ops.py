@@ -487,6 +487,7 @@ def _tensor_matrix_multiply(
 
     # Block dimension for shared memory tiles
     BLOCK_DIM = 32
+    TILE_DIM = 8  # Sub-tile dimension for further division
 
     # Shared memory tiles for a and b matrices
     a_shared = cuda.shared.array((BLOCK_DIM, BLOCK_DIM), numba.float64)
@@ -500,7 +501,13 @@ def _tensor_matrix_multiply(
     row = cuda.blockIdx.x * BLOCK_DIM + tx
     col = cuda.blockIdx.y * BLOCK_DIM + ty
 
-    # Initialize accumulator
+    # Sub-tile position
+    sub_tile_row = tx // TILE_DIM
+    sub_tile_col = ty // TILE_DIM
+    local_row = tx % TILE_DIM
+    local_col = ty % TILE_DIM
+
+    # Initialize accumulator in register
     acc = 0.0
 
     # Number of tiles needed
@@ -508,34 +515,41 @@ def _tensor_matrix_multiply(
 
     # Process each tile
     for tile_idx in range(num_tiles):
-        # Initialize shared memory to 0
-        a_shared[tx, ty] = 0.0
-        b_shared[tx, ty] = 0.0
-
-        # Load a tile
+        # Collaborative loading of tiles into shared memory
+        # Each thread loads one element
         a_x = row
         a_y = tile_idx * BLOCK_DIM + ty
         if a_x < a_shape[1] and a_y < a_shape[2]:
             a_pos = batch * a_batch_stride + a_x * a_strides[1] + a_y * a_strides[2]
             a_shared[tx, ty] = a_storage[a_pos]
+        else:
+            a_shared[tx, ty] = 0.0
 
-        # Load b tile
         b_x = tile_idx * BLOCK_DIM + tx
         b_y = col
         if b_x < b_shape[1] and b_y < b_shape[2]:
             b_pos = batch * b_batch_stride + b_x * b_strides[1] + b_y * b_strides[2]
             b_shared[tx, ty] = b_storage[b_pos]
+        else:
+            b_shared[tx, ty] = 0.0
 
         cuda.syncthreads()
 
-        # Compute partial dot product for this tile
+        # Process sub-tiles to maximize register usage
         if row < out_shape[1] and col < out_shape[2]:
-            for k in range(min(BLOCK_DIM, a_shape[2] - tile_idx * BLOCK_DIM)):
-                acc += a_shared[tx, k] * b_shared[k, ty]
+            for k in range(0, min(BLOCK_DIM, a_shape[2] - tile_idx * BLOCK_DIM), TILE_DIM):
+                # Load sub-tile values into registers
+                sub_acc = 0.0
+                for i in range(TILE_DIM):
+                    for j in range(TILE_DIM):
+                        if k + j < a_shape[2]:
+                            sub_acc += (a_shared[tx, k + j] * 
+                                      b_shared[k + j, ty])
+                acc += sub_acc
 
         cuda.syncthreads()
 
-    # Write final result to global memory
+    # Single write to global memory
     if row < out_shape[1] and col < out_shape[2]:
         out_pos = batch * out_strides[0] + row * out_strides[1] + col * out_strides[2]
         out[out_pos] = acc
