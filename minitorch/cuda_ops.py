@@ -458,7 +458,6 @@ def mm_practice(a: Tensor, b: Tensor) -> TensorData:
     )
     return out
 
-
 def _tensor_matrix_multiply(
     out: Storage,
     out_shape: Shape,
@@ -493,28 +492,23 @@ def _tensor_matrix_multiply(
 
     BLOCK_DIM = 32
     # Shared memory tiles for a and b
-    a_shared = cuda.shared.array((BLOCK_DIM, BLOCK_DIM), numba.float64)
-    b_shared = cuda.shared.array((BLOCK_DIM, BLOCK_DIM), numba.float64)
-
-    # Global thread position
-    i = cuda.blockIdx.x * BLOCK_DIM + cuda.threadIdx.x
-    j = cuda.blockIdx.y * BLOCK_DIM + cuda.threadIdx.y
+    a_shared = cuda.shared.array((BLOCK_DIM, BLOCK_DIM), numba.float32)
+    b_shared = cuda.shared.array((BLOCK_DIM, BLOCK_DIM), numba.float32)
 
     # Local thread position in block
     tx = cuda.threadIdx.x
     ty = cuda.threadIdx.y
+
+    # Global thread position
+    i = cuda.blockIdx.x * BLOCK_DIM + tx
+    j = cuda.blockIdx.y * BLOCK_DIM + ty
 
     # Initialize accumulator
     acc = 0.0
 
     # Loop over tiles
     for k_tile in range(0, (a_shape[2] + BLOCK_DIM - 1) // BLOCK_DIM):
-        # Clear shared memory
-        a_shared[tx, ty] = 0.0
-        b_shared[tx, ty] = 0.0
-        cuda.syncthreads()
-
-        # Load a tile
+        # Load a tile cooperatively
         k = k_tile * BLOCK_DIM + ty
         if i < a_shape[1] and k < a_shape[2]:
             a_pos = batch * a_batch_stride + i * a_strides[1] + k * a_strides[2]
@@ -530,12 +524,20 @@ def _tensor_matrix_multiply(
 
         # Compute partial dot product
         if i < out_shape[1] and j < out_shape[2]:
-            for k in range(min(BLOCK_DIM, a_shape[2] - k_tile * BLOCK_DIM)):
-                acc += a_shared[tx, k] * b_shared[k, ty]
+            # Unroll inner loop for better performance
+            for k in range(0, BLOCK_DIM, 4):
+                if k + k_tile * BLOCK_DIM < a_shape[2]:
+                    acc += a_shared[tx, k] * b_shared[k, ty]
+                    if k + 1 < BLOCK_DIM:
+                        acc += a_shared[tx, k + 1] * b_shared[k + 1, ty]
+                    if k + 2 < BLOCK_DIM:
+                        acc += a_shared[tx, k + 2] * b_shared[k + 2, ty]
+                    if k + 3 < BLOCK_DIM:
+                        acc += a_shared[tx, k + 3] * b_shared[k + 3, ty]
 
         cuda.syncthreads()
 
-    # Write result to global memory once
+    # Single write to global memory
     if i < out_shape[1] and j < out_shape[2]:
         out_pos = batch * out_strides[0] + i * out_strides[1] + j * out_strides[2]
         out[out_pos] = acc
