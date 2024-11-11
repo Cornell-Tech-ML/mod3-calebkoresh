@@ -361,26 +361,31 @@ def tensor_reduce(
         # Initialize reduction with first element
         cache[pos] = reduce_value
 
-        # Loop over reduction dimension
-        for k in range(a_shape[reduce_dim]):
-            # Copy output index to get input index
-            a_index = cuda.local.array(MAX_DIMS, numba.int32)
-            for i in range(len(out_shape)):
-                a_index[i] = out_index[i]
-            # Set reduction dimension index
-            a_index[reduce_dim] = k
+        # Pre-calculate input indices to avoid repeated calculations
+        a_index = cuda.local.array(MAX_DIMS, numba.int32)
+        for i in range(len(out_shape)):
+            a_index[i] = out_index[i]
 
-            # Get input value and reduce
+        # Loop over reduction dimension with coalesced memory access
+        reduce_size = a_shape[reduce_dim]
+        for k in range(reduce_size):
+            a_index[reduce_dim] = k
             in_pos = index_to_position(a_index, a_strides)
             val = a_storage[in_pos]
             cache[pos] = fn(cache[pos], val)
 
-        # Ensure all threads complete
-        cuda.syncthreads()
+        # Parallel reduction in shared memory
+        stride = BLOCK_DIM // 2
+        while stride > 0:
+            cuda.syncthreads()
+            if pos < stride:
+                cache[pos] = fn(cache[pos], cache[pos + stride])
+            stride //= 2
 
         # Write final reduced value to output
-        out_pos_final = index_to_position(out_index, out_strides)
-        out[out_pos_final] = cache[pos]
+        if pos == 0:
+            out_pos_final = index_to_position(out_index, out_strides)
+            out[out_pos_final] = cache[0]
 
     return jit(_reduce)
 
