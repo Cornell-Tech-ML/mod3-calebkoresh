@@ -318,15 +318,12 @@ def tensor_reduce(
         for i in range(size):
             out_size *= out_shape[i]
 
-        # Create index buffers - initialize directly without np.zeros
-        out_index = np.empty(size, np.int32)
-        a_index = np.empty(size, np.int32)
-        for i in prange(size):
-            out_index[i] = 0
-            a_index[i] = 0
-
         # Main parallel loop over output positions
         for i in prange(out_size):
+            # Create thread-local index buffers
+            out_index = np.empty(size, np.int32)
+            a_index = np.empty(size, np.int32)
+
             # Convert position to indices
             to_index(i, out_shape, out_index)
 
@@ -353,7 +350,6 @@ def tensor_reduce(
             out[o_pos] = reduced
 
     return njit(_reduce, parallel=True)
-
 
 def _tensor_matrix_multiply(
     out: Storage,
