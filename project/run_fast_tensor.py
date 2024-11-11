@@ -43,7 +43,7 @@ class Linear(minitorch.Module):
 
     def forward(self, x):
         # Use matrix multiplication directly instead of view/sum operations
-        return self.weights.value @ (x.permute(1, 0)).permute(1, 0) + self.bias.value
+        return (x @ self.weights.value) + self.bias.value
 
 
 class FastTrain:
