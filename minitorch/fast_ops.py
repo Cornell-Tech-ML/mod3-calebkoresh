@@ -199,10 +199,10 @@ def tensor_map(
             o_pos = index_to_position(out_index, out_strides)
             # Map output index to input index
             broadcast_index(out_index, out_shape, in_shape, in_index)
-            
+
             # Calculate input position
             i_pos = index_to_position(in_index, in_strides)
-            
+
             # Apply function
             out[o_pos] = fn(in_storage[i_pos])
 
@@ -350,6 +350,7 @@ def tensor_reduce(
             out[o_pos] = reduced
 
     return njit(_reduce, parallel=True)
+
 
 def _tensor_matrix_multiply(
     out: Storage,

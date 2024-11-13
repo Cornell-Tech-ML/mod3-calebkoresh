@@ -45,6 +45,7 @@ broadcast_index = device_jit(broadcast_index)
 
 THREADS_PER_BLOCK = 32
 
+
 class CudaOps(TensorOps):
     cuda = True
 
@@ -452,6 +453,8 @@ def mm_practice(a: Tensor, b: Tensor) -> TensorData:
         out.tuple()[0], a._tensor._storage, b._tensor._storage, size
     )
     return out
+
+
 def _tensor_matrix_multiply(
     out: Storage,
     out_shape: Shape,
@@ -488,7 +491,7 @@ def _tensor_matrix_multiply(
     # Get thread indices
     tx = cuda.threadIdx.x
     ty = cuda.threadIdx.y
-    
+
     # Get block indices
     bx = cuda.blockIdx.x
     by = cuda.blockIdx.y
@@ -510,18 +513,22 @@ def _tensor_matrix_multiply(
     # Loop over tiles
     for t in range((a_shape[2] + TILE_SIZE - 1) // TILE_SIZE):
         # Load data into shared memory tiles
-        if (row < a_shape[1] and t * TILE_SIZE + tx < a_shape[2]):
-            a_pos = (batch * a_batch_stride + 
-                    row * a_strides[1] + 
-                    (t * TILE_SIZE + tx) * a_strides[2])
+        if row < a_shape[1] and t * TILE_SIZE + tx < a_shape[2]:
+            a_pos = (
+                batch * a_batch_stride
+                + row * a_strides[1]
+                + (t * TILE_SIZE + tx) * a_strides[2]
+            )
             tile_a[ty, tx] = a_storage[a_pos]
         else:
             tile_a[ty, tx] = 0.0
 
-        if (t * TILE_SIZE + ty < b_shape[1] and col < b_shape[2]):
-            b_pos = (batch * b_batch_stride + 
-                    (t * TILE_SIZE + ty) * b_strides[1] + 
-                    col * b_strides[2])
+        if t * TILE_SIZE + ty < b_shape[1] and col < b_shape[2]:
+            b_pos = (
+                batch * b_batch_stride
+                + (t * TILE_SIZE + ty) * b_strides[1]
+                + col * b_strides[2]
+            )
             tile_b[ty, tx] = b_storage[b_pos]
         else:
             tile_b[ty, tx] = 0.0
@@ -539,9 +546,7 @@ def _tensor_matrix_multiply(
 
     # Write final result to global memory
     if row < out_shape[1] and col < out_shape[2]:
-        out_pos = (batch * out_strides[0] + 
-                  row * out_strides[1] + 
-                  col * out_strides[2])
+        out_pos = batch * out_strides[0] + row * out_strides[1] + col * out_strides[2]
         out[out_pos] = acc
 
 
